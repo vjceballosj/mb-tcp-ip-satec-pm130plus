@@ -36,7 +36,7 @@ public class Pm130PollerService {
                 .thenAccept(response -> {
                     try {
                         if (response instanceof ReadHoldingRegistersResponse registersResponse) {
-                            int value = registersResponse.getRegisters().readUnsignedShort(0);
+                            int value = registersResponse.getRegisters().readUnsignedShort();
 
                             MeterReading reading = MeterReading.builder()
                                     .registerAddress(registerAddress)
