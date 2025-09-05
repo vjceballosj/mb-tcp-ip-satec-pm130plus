@@ -7,21 +7,19 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "pm130")
 public record Pm130Properties(
 
+        // --- General ---
         @NotBlank String protocol,       // "tcp" o "rtu"
+        @Min(1) int unitId,              // ID del dispositivo esclavo
+        @Min(1000) long pollInterval,    // intervalo mínimo = 1s
 
         // --- TCP ---
         String host,
-        int port,
+        @Min(1) int port,
 
         // --- RTU ---
-        String serialPort,
-        @Min(1200) int baudrate,
-        @Min(5) int databits,
-        @Min(1) int stopbits,
-        @NotBlank String parity,
-
-        // --- General ---
-        @Min(1) int unitId,
-        @Min(1000) long pollInterval
-
+        String serialPort,               // Ejemplo: COM3, /dev/ttyUSB0
+        @Min(1200) int baudrate,         // mínimo 1200 bps
+        @Min(5) int databits,            // usual: 7 u 8
+        @Min(1) int stopbits,            // usual: 1 o 2
+        @NotBlank String parity          // "none", "even", "odd"
 ) {}

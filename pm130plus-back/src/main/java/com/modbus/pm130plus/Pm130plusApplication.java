@@ -8,13 +8,15 @@ package com.modbus.pm130plus;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @ConfigurationPropertiesScan("com.modbus.pm130plus.config")
+@EnableScheduling
 public class Pm130plusApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(Pm130plusApplication.class, args);
     }
 }
+
 

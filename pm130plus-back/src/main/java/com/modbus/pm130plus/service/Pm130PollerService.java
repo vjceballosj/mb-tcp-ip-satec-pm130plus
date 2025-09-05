@@ -7,10 +7,12 @@ import com.modbus.pm130plus.config.Pm130Properties;
 import com.modbus.pm130plus.model.MeterReading;
 import com.modbus.pm130plus.repository.MeterReadingRepository;
 import com.serotonin.modbus4j.ModbusMaster;
+import com.serotonin.modbus4j.code.DataType;
 import com.serotonin.modbus4j.locator.BaseLocator;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -25,117 +27,99 @@ public class Pm130PollerService {
     private final Pm130Properties properties;
     private final MeterReadingRepository repository;
 
-    // Inyectados condicionalmente
-    private final ModbusTcpMaster tcpMaster;   // DigitalPetri
-    private final ModbusMaster rtuMaster;      // Modbus4j
+    @Autowired(required = false)
+    private ModbusTcpMaster tcpMaster;
+
+    @Autowired(required = false)
+    private ModbusMaster rtuMaster;
 
     @PreDestroy
     public void shutdown() {
-        log.info("🛑 Cerrando conexiones Modbus...");
         try {
             if (tcpMaster != null) {
                 tcpMaster.disconnect().get();
+                log.info("TCP Master desconectado correctamente.");
             }
         } catch (Exception e) {
-            log.warn("⚠️ Error cerrando TCP master: {}", e.getMessage());
+            log.warn("Error al cerrar TCP Master: {}", e.getMessage());
         }
+
         if (rtuMaster != null) {
             rtuMaster.destroy();
+            log.info("RTU Master cerrado correctamente.");
         }
     }
 
-    /**
-     * Tarea periódica de polling (cada pollInterval ms).
-     */
     @Scheduled(fixedDelayString = "${pm130.poll-interval}")
     public void poll() {
-        String protocol = properties.protocol().toLowerCase();
+        String mode = properties.protocol() == null ? "tcp" : properties.protocol().toLowerCase();
 
-        switch (protocol) {
+        switch (mode) {
             case "tcp" -> pollTcp();
             case "rtu" -> pollRtu();
-            default -> log.error("❌ Protocolo no soportado: {}", properties.protocol());
+            default -> log.error("Protocolo no soportado: {}", mode);
         }
     }
 
-    /**
-     * 🔹 Polling por TCP/IP usando DigitalPetri.
-     */
     private void pollTcp() {
         if (tcpMaster == null) {
-            log.warn("⚠️ TCP Master no inicializado. Revisa configuración.");
+            log.warn("TCP Master no disponible.");
             return;
         }
-
         try {
-            int startAddress = 0;
-            int quantity = 6; // ejemplo: 6 registros
+            int start = 0;
+            int qty = 6;
 
-            ReadHoldingRegistersRequest request =
-                    new ReadHoldingRegistersRequest(startAddress, quantity);
+            ReadHoldingRegistersRequest req = new ReadHoldingRegistersRequest(start, qty);
+            CompletableFuture<ReadHoldingRegistersResponse> fut =
+                    tcpMaster.sendRequest(req, properties.unitId());
 
-            CompletableFuture<ReadHoldingRegistersResponse> future =
-                    tcpMaster.sendRequest(request, properties.unitId());
-
-            future.whenComplete((response, ex) -> {
-                if (response != null) {
-                    int voltage = response.getRegisters().readUnsignedShort(0);
-                    int current = response.getRegisters().readUnsignedShort(2);
-                    int power   = response.getRegisters().readUnsignedShort(4);
-
-                    saveReading(voltage, current, power);
+            fut.whenComplete((resp, ex) -> {
+                if (ex != null) {
+                    log.error("Error en petición Modbus TCP", ex);
+                    return;
+                }
+                if (resp != null && resp.getRegisters() != null) {
+                    int voltage = resp.getRegisters().getUnsignedShort(0);
+                    int current = resp.getRegisters().getUnsignedShort(1);
+                    int power   = resp.getRegisters().getUnsignedShort(2);
+                    save(voltage, current, power);
                 } else {
-                    log.error("❌ Error en polling TCP: {}", ex.getMessage());
+                    log.warn("Respuesta TCP vacía.");
                 }
             });
-
         } catch (Exception e) {
-            log.error("❌ Excepción en pollTcp()", e);
+            log.error("Excepción en pollTcp()", e);
         }
     }
 
-    /**
-     * 🔹 Polling por RTU/RS485 usando Modbus4j.
-     */
     private void pollRtu() {
         if (rtuMaster == null) {
-            log.warn("⚠️ RTU Master no inicializado. Revisa configuración.");
+            log.warn("RTU Master no disponible.");
             return;
         }
-
         try {
-            int slaveId = properties.unitId();
-            int startAddress = 0;
+            int sid = properties.unitId();
+            int start = 0;
 
-            Number voltage = rtuMaster.getValue(
-                    BaseLocator.holdingRegister(slaveId, startAddress, BaseLocator.INTEGER16));
+            Number voltage = rtuMaster.getValue(BaseLocator.holdingRegister(sid, start,     DataType.TWO_BYTE_INT_UNSIGNED));
+            Number current = rtuMaster.getValue(BaseLocator.holdingRegister(sid, start + 1, DataType.TWO_BYTE_INT_UNSIGNED));
+            Number power   = rtuMaster.getValue(BaseLocator.holdingRegister(sid, start + 2, DataType.TWO_BYTE_INT_UNSIGNED));
 
-            Number current = rtuMaster.getValue(
-                    BaseLocator.holdingRegister(slaveId, startAddress + 1, BaseLocator.INTEGER16));
-
-            Number power = rtuMaster.getValue(
-                    BaseLocator.holdingRegister(slaveId, startAddress + 2, BaseLocator.INTEGER16));
-
-            saveReading(voltage.intValue(), current.intValue(), power.intValue());
-
+            save(voltage.intValue(), current.intValue(), power.intValue());
         } catch (Exception e) {
-            log.error("❌ Error en polling RTU", e);
+            log.error("Error en pollRtu()", e);
         }
     }
 
-    /**
-     * 🔹 Guardar en la base de datos.
-     */
-    private void saveReading(int voltage, int current, int power) {
-        MeterReading reading = MeterReading.builder()
+    private void save(int voltage, int current, int power) {
+        repository.save(MeterReading.builder()
                 .timestamp(LocalDateTime.now())
                 .voltage(voltage)
                 .current(current)
                 .power(power)
-                .build();
+                .build());
 
-        repository.save(reading);
-        log.info("✅ Lectura guardada: {} V, {} A, {} kW",
-                voltage, current, power);
+        log.info("Lectura guardada: {} V, {} A, {} kW", voltage, current, power);
     }
 }
