@@ -1,7 +1,7 @@
 # mb-tcp-ip-satec-pm130plus
 Fullstack Spring - JAVA 21 &amp; Angular 17 ModbusTCP/IP PM130PLUS SATEC
 
-Estrcutura Back (Java Spring Boot 21):
+Estructura Back (Java Spring Boot 21):
 
 src/main/java/com/modbus/pm130plus
 │
@@ -23,7 +23,7 @@ src/main/java/com/modbus/pm130plus
 └── controller/                     # API REST
     └── MeterReadingController.java
 
-Estrcutura Front (Angular 22+, material):
+Estructura Front (Angular 22+, material):
 
 src/app/
 │
