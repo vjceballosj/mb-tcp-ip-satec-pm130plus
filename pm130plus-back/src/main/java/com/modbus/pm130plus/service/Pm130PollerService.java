@@ -12,8 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
+import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -25,51 +25,47 @@ public class Pm130PollerService {
     private final MeterReadingRepository repository;
 
     /**
-     * Polls the PM130 Plus meter at fixed intervals.
-     * Interval is configurable in application.properties -> pm130.poll-interval (ms).
+     * Lee periódicamente registros Modbus del PM130 Plus
+     * y persiste los valores físicos (V, A, kW).
      */
-    @Scheduled(fixedDelayString = "${pm130.poll-interval:5000}")
-    public void pollMeter() {
-        log.debug("🔄 Polling PM130 Plus at {}:{}", properties.host(), properties.port());
-
+    @Scheduled(fixedDelayString = "${pm130.poll-interval}")
+    public void poll() {
         try {
-            // Ejemplo: leer 6 registros desde dirección 0
-            ReadHoldingRegistersRequest request =
-                    new ReadHoldingRegistersRequest(0, 6);
+            // Ejemplo de direcciones de registros Modbus (ajustar según manual PM130 Plus)
+            int voltageAddress = 0x0000;
+            int currentAddress = 0x0006;
+            int powerAddress   = 0x0012;
 
-            CompletableFuture<ReadHoldingRegistersResponse> future =
-                    master.sendRequest(request, properties.unitId());
+            double voltage = readRegister(voltageAddress) / 10.0; // Escala de ejemplo
+            double current = readRegister(currentAddress) / 100.0;
+            double power   = readRegister(powerAddress) / 100.0;
 
-            future.whenComplete((response, ex) -> {
-                if (ex != null) {
-                    log.error("❌ Error polling PM130 Plus: {}", ex.getMessage());
-                    return;
-                }
+            MeterReading reading = MeterReading.builder()
+                    .voltage(voltage)
+                    .current(current)
+                    .power(power)
+                    .timestamp(LocalDateTime.now())
+                    .build();
 
-                if (response != null) {
-                    ByteBuf buf = response.getRegisters();
+            repository.save(reading);
 
-                    // ⚡ Ejemplo simple: leer 3 valores
-                    double voltage = buf.readUnsignedShort();
-                    double current = buf.readUnsignedShort();
-                    double power   = buf.readUnsignedShort();
-
-                    MeterReading reading = MeterReading.builder()
-                            .timestamp(Instant.now())
-                            .voltage(voltage)
-                            .current(current)
-                            .power(power)
-                            .build();
-
-                    repository.save(reading);
-
-                    log.info("✅ Saved reading -> V: {}, I: {}, P: {}",
-                            voltage, current, power);
-                }
-            });
+            log.info("📥 Nueva lectura: {} V | {} A | {} kW", voltage, current, power);
 
         } catch (Exception e) {
-            log.warn("⚠️ Polling failed: {}", e.getMessage());
+            log.error("❌ Error leyendo el PM130 Plus", e);
+        }
+    }
+
+    private double readRegister(int address) throws Exception {
+        ReadHoldingRegistersRequest request = new ReadHoldingRegistersRequest(address, 2, properties.unitId());
+        Optional<ReadHoldingRegistersResponse> response =
+                master.send(request).get();
+
+        if (response.isPresent()) {
+            ByteBuf buf = response.get().getRegisters();
+            return buf.readUnsignedShort();
+        } else {
+            throw new RuntimeException("Sin respuesta de Modbus para dirección " + address);
         }
     }
 }

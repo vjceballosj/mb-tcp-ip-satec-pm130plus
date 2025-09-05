@@ -3,15 +3,9 @@ import { CommonModule } from '@angular/common';
 import { MatTableModule } from '@angular/material/table';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
-import { HttpClient } from '@angular/common/http';
+import { MeterReading } from '../../core/models/meter-reading.model';
+import { MeterReadingService } from '../../core/services/meter-reading.service';
 
-interface MeterReading {
-  id: number;
-  timestamp: string;
-  voltage: number;
-  current: number;
-  power: number;
-}
 
 @Component({
   selector: 'app-meter-reading-list',
@@ -27,12 +21,14 @@ interface MeterReading {
 })
 export class MeterReadingListComponent implements OnInit {
   readings: MeterReading[] = [];
-  displayedColumns: string[] = ['timestamp', 'voltage', 'current', 'power'];
+  displayedColumns: string[] = ['timestamp', 'registerAddress', 'value'];
 
-  constructor(private http: HttpClient) {}
+  constructor(private meterReadingService: MeterReadingService) {}
 
   ngOnInit(): void {
-    this.http.get<MeterReading[]>('http://localhost:8080/api/readings')
-      .subscribe(data => this.readings = data);
+    this.meterReadingService.getAll().subscribe({
+      next: (data) => (this.readings = data),
+      error: (err) => console.error('❌ Error loading readings', err)
+    });
   }
 }

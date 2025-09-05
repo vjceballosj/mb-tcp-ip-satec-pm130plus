@@ -3,31 +3,29 @@ package com.modbus.pm130plus.model;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
+/**
+ * Entidad JPA que representa una lectura del PM130 Plus,
+ * con valores físicos ya transformados.
+ */
 @Entity
 @Table(name = "meter_readings")
-@Getter
-@Setter
-@Builder
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class MeterReading {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, updatable = false)
-    private Instant timestamp;
+    private double voltage;   // Voltaje en V
+    private double current;   // Corriente en A
+    private double power;     // Potencia en kW
 
-    @Column(nullable = false)
-    private double voltage;
-
-    @Column(nullable = false)
-    private double current;
-
-    @Column(nullable = false)
-    private double power;
+    private LocalDateTime timestamp;
 }
+
 
