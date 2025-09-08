@@ -27,9 +27,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @TestPropertySource(properties = {
-        "pm130.protocol=tcp",   // por defecto TCP
+        "pm130.protocol=rtu",   // por defecto TCP
         "pm130.unit-id=1",
-        "pm130.poll-interval=1000"
+        "pm130.poll-interval=5000"
 })
 class Pm130PollerServiceTest {
 
@@ -103,10 +103,10 @@ class Pm130PollerServiceTest {
                 props.host(),
                 props.port(),
                 props.serialPort(),
-                props.baudrate(),
-                props.databits(),
-                props.stopbits(),
-                props.parity()
+                props.serialBaudrate(),
+                props.serialDatabits(),
+                props.serialStopbits(),
+                props.serialParity()
         );
 
         protocolField.set(pollerService, newProps);

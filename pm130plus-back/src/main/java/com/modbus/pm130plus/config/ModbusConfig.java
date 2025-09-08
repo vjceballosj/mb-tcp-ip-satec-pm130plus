@@ -46,20 +46,20 @@ public class ModbusConfig {
     @Bean(destroyMethod = "destroy")
     @ConditionalOnProperty(name = "pm130.protocol", havingValue = "rtu")
     public ModbusMaster rtuMaster() throws ModbusInitException {
-        int parity = switch (pm.parity().toLowerCase()) {
+        int parity = switch (pm.serialParity().toLowerCase()) {
             case "none" -> NO_PARITY;
             case "odd" -> ODD_PARITY;
             case "even" -> EVEN_PARITY;
             case "mark" -> MARK_PARITY;
             case "space" -> SPACE_PARITY;
-            default -> throw new IllegalArgumentException("Paridad inválida: " + pm.parity());
+            default -> throw new IllegalArgumentException("Paridad inválida: " + pm.serialParity());
         };
 
         SerialPortWrapperImpl wrapper = new SerialPortWrapperImpl(
                 pm.serialPort(),
-                pm.baudrate(),
-                pm.databits(),
-                pm.stopbits(),
+                pm.serialBaudrate(),
+                pm.serialDatabits(),
+                pm.serialStopbits(),
                 parity
         );
 
